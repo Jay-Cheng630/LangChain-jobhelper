@@ -37,7 +37,9 @@ def validate_input(jd, skills, hours, days):
         raise AnalysisError("请填写招聘 JD 和技能情况；没有基础可以填写“暂无”。")
     if len(jd) > 15000 or len(skills) > 3000:
         raise AnalysisError("JD 最多 15000 字，技能描述最多 3000 字。")
-    if not 0.5 <= hours <= 12 or not 1 <= days <= 30:
+    if (isinstance(hours, bool) or not isinstance(hours, (int, float))
+            or isinstance(days, bool) or not isinstance(days, int)
+            or not 0.5 <= hours <= 12 or not 1 <= days <= 30):
         raise AnalysisError("每天学习时间须为 0.5–12 小时，计划天数须为 1–30 天。")
 
 
@@ -65,6 +67,9 @@ def build_tools(model, jd, skills, hours, days, results):
             if not item.evidence or item.evidence not in jd:
                 raise ValueError("模型返回了无法在 JD 中核对的依据")
         results["job"] = job.model_dump()
+        # 上游结果重新生成后，旧差距和旧计划不再有效。
+        results.pop("gaps", None)
+        results.pop("plan", None)
         return results["job"]
 
     @tool
@@ -79,11 +84,13 @@ def build_tools(model, jd, skills, hours, days, results):
                         {"job": results["job"], "user_skills": skills})
         requirements = results["job"]["required"] + results["job"]["preferred"]
         expected = {item["skill"]: item["evidence"] for item in requirements}
-        if {item.skill for item in gaps.items} != set(expected):
+        if (len(gaps.items) != len(expected)
+                or {item.skill for item in gaps.items} != set(expected)):
             raise ValueError("技能分析没有覆盖岗位技能")
         if any(item.evidence != expected[item.skill] for item in gaps.items):
             raise ValueError("技能分析的 JD 依据不一致")
         results["gaps"] = gaps.model_dump()
+        results.pop("plan", None)
         return results["gaps"]
 
     @tool

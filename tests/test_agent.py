@@ -65,7 +65,10 @@ def test_empty_input(jd, skills):
         run_analysis(jd, skills, 2, 2)
 
 
-@pytest.mark.parametrize("hours,days", [(0, 2), (2, 0), (13, 2), (2, 31)])
+@pytest.mark.parametrize("hours,days", [
+    (0, 2), (2, 0), (13, 2), (2, 31), (2, 1.5),
+    (True, 2), (2, True), (float("nan"), 2), ("2", 2),
+])
 def test_invalid_time(hours, days):
     with pytest.raises(AnalysisError):
         run_analysis(JD, SKILLS, hours, days)
@@ -148,4 +151,36 @@ def test_wrong_plan_days():
     tools, results = toolset([{**PLAN, "days": PLAN["days"][:1]}])
     results.update(job=JOB, gaps=GAPS)
     with pytest.raises(ValueError, match="天数"):
+        tools[2].invoke({"daily_hours": 2, "plan_days": 2})
+
+
+def test_reextract_invalidates_downstream_results():
+    tools, results = toolset([JOB])
+    results.update(job=JOB, gaps=GAPS, plan=PLAN)
+    tools[0].invoke({"job_description": JD})
+    assert "gaps" not in results and "plan" not in results
+
+
+def test_reanalyze_invalidates_plan():
+    tools, results = toolset([GAPS])
+    results.update(job=JOB, gaps=GAPS, plan=PLAN)
+    tools[1].invoke({"user_skills": SKILLS})
+    assert "plan" not in results
+
+
+def test_duplicate_gap_rejected():
+    tools, results = toolset([{"items": GAPS["items"] + GAPS["items"][:1]}])
+    results["job"] = JOB
+    with pytest.raises(ValueError):
+        tools[1].invoke({"user_skills": SKILLS})
+
+
+@pytest.mark.parametrize("changes", [
+    {"tasks": []}, {"tasks": [" "]}, {"outcome": " "}, {"topic": ""},
+])
+def test_empty_plan_content_rejected(changes):
+    plan = {**PLAN, "days": [{**PLAN["days"][0], **changes}, PLAN["days"][1]]}
+    tools, results = toolset([plan])
+    results.update(job=JOB, gaps=GAPS)
+    with pytest.raises(ValueError):
         tools[2].invoke({"daily_hours": 2, "plan_days": 2})

@@ -1,12 +1,14 @@
 """工具输出的数据格式。"""
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
+
+Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class Requirement(BaseModel):
-    skill: str
+    skill: Text
     evidence: str = Field(description="JD 中逐字引用的依据")
 
 
@@ -32,14 +34,14 @@ class Gaps(BaseModel):
 
 
 class Day(BaseModel):
-    day: int
+    day: int = Field(ge=1)
     hours: float = Field(gt=0, le=12)
     priority: Literal["高", "中", "低"]
-    topic: str
-    tasks: list[str]
-    outcome: str
+    topic: Text
+    tasks: list[Text] = Field(min_length=1)
+    outcome: Text
 
 
 class Plan(BaseModel):
     days: list[Day]
-    milestones: list[str]
+    milestones: list[Text] = Field(min_length=1)
